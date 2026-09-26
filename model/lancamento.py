@@ -33,8 +33,8 @@ class CategoriaReceita(str, enum.Enum):
     outros = "Outros"
 
 
-# Usado para validar, na atualização de um lançamento, se a categoria
-# informada é compatível com o tipo (despesa/receita) daquele lançamento.
+# Usado para validar, no cadastro e na atualização de um lançamento, se a
+# categoria informada é compatível com o tipo (despesa/receita) dele.
 CATEGORIAS_POR_TIPO = {
     TipoLancamento.despesa: {categoria.value
                              for categoria in CategoriaDespesa},

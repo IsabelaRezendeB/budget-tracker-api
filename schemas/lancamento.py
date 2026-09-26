@@ -4,9 +4,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from model.lancamento import (
-    CategoriaDespesa, CategoriaReceita, Lancamento, TipoLancamento,
-)
+from model.lancamento import Lancamento, TipoLancamento
+from schemas.periodo import PeriodoSchema
 from schemas.subitem import SubitemViewSchema
 from schemas.tipos import ValorMonetario
 
@@ -27,48 +26,40 @@ def _vazia_vira_hoje(valor):
     return valor or hoje()
 
 
-class DespesaSchema(BaseModel):
-    """Define como uma nova despesa deve ser representada ao ser cadastrada.
+class LancamentoSchema(BaseModel):
+    """Define como um novo lançamento (despesa ou receita) deve ser
+    representado ao ser cadastrado.
 
-    `categoria` é um valor fixo, dentre as opções de CategoriaDespesa;
-    quando omitida, assume "Outros".
+    `categoria` precisa ser uma das opções do tipo escolhido (ver
+    GET /categorias); quando omitida, assume "Outros".
     """
     model_config = ConfigDict(str_strip_whitespace=True)
 
+    tipo: TipoLancamento = TipoLancamento.despesa
     nome: str = Field("Compras do mês", min_length=1)
     valor: ValorMonetario = Decimal("30.00")
     data: datetime = Field(default_factory=hoje, description=DESCRICAO_DATA)
-    categoria: CategoriaDespesa = CategoriaDespesa.outros
+    categoria: str = Field(
+        "Outros",
+        description="Categoria compatível com o tipo (ver GET /categorias).")
 
     @field_validator("categoria", mode="before")
     @classmethod
     def _vazio_vira_outros(cls, valor):
         # se vier em branco (ex.: um form que não preencheu o campo),
         # cai no padrão "Outros" em vez de falhar a validação
-        return valor or CategoriaDespesa.outros.value
+        return valor or "Outros"
 
     _data_padrao = field_validator("data", mode="before")(_vazia_vira_hoje)
 
 
-class ReceitaSchema(BaseModel):
-    """Define como uma nova receita deve ser representada ao ser cadastrada.
+class LancamentoListaSchema(PeriodoSchema):
+    """Define os filtros opcionais da listagem de lançamentos: o tipo
+    (despesa ou receita) e o período.
 
-    `categoria` é um valor fixo, dentre as opções de CategoriaReceita;
-    quando omitida, assume "Outros".
+    Sem `tipo`, a listagem traz despesas e receitas juntas.
     """
-    model_config = ConfigDict(str_strip_whitespace=True)
-
-    nome: str = Field("Salário", min_length=1)
-    valor: ValorMonetario = Decimal("3000.00")
-    data: datetime = Field(default_factory=hoje, description=DESCRICAO_DATA)
-    categoria: CategoriaReceita = CategoriaReceita.outros
-
-    @field_validator("categoria", mode="before")
-    @classmethod
-    def _vazio_vira_outros(cls, valor):
-        return valor or CategoriaReceita.outros.value
-
-    _data_padrao = field_validator("data", mode="before")(_vazia_vira_hoje)
+    tipo: Optional[TipoLancamento] = None
 
 
 class LancamentoBuscaSchema(BaseModel):
@@ -111,7 +102,7 @@ class LancamentoViewSchema(BaseModel):
 
 
 class ListagemLancamentosSchema(BaseModel):
-    """Define como uma listagem de despesas ou receitas é retornada"""
+    """Define como uma listagem de lançamentos é retornada"""
     lancamentos: List[LancamentoViewSchema]
 
 

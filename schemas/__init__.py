@@ -1,13 +1,13 @@
 from schemas.categoria import CategoriasSchema, apresenta_categorias
 from schemas.error import ErrorSchema
 from schemas.lancamento import (
-    DespesaSchema,
     LancamentoBuscaSchema,
     LancamentoDelSchema,
+    LancamentoListaSchema,
+    LancamentoSchema,
     LancamentoUpdateSchema,
     LancamentoViewSchema,
     ListagemLancamentosSchema,
-    ReceitaSchema,
     apresenta_lancamento,
     apresenta_lancamentos,
 )
@@ -33,13 +33,13 @@ __all__ = [
     "CategoriasSchema",
     "apresenta_categorias",
     "ErrorSchema",
-    "DespesaSchema",
     "LancamentoBuscaSchema",
     "LancamentoDelSchema",
+    "LancamentoListaSchema",
+    "LancamentoSchema",
     "LancamentoUpdateSchema",
     "LancamentoViewSchema",
     "ListagemLancamentosSchema",
-    "ReceitaSchema",
     "apresenta_lancamento",
     "apresenta_lancamentos",
     "PeriodoSchema",

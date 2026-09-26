@@ -15,10 +15,11 @@ from model import (
 )
 from model.lancamento import CATEGORIAS_POR_TIPO
 from schemas import (
-    CategoriasSchema, DespesaSchema, ErrorSchema, LancamentoBuscaSchema,
-    LancamentoDelSchema, LancamentoUpdateSchema, LancamentoViewSchema,
-    ListagemLancamentosSchema, LoginSchema, MensagemSchema, PeriodoSchema,
-    ReceitaSchema, ResumoSchema, SubitemBuscaSchema, SubitemDelSchema,
+    CategoriasSchema, ErrorSchema, LancamentoBuscaSchema,
+    LancamentoDelSchema, LancamentoListaSchema, LancamentoSchema,
+    LancamentoUpdateSchema, LancamentoViewSchema, ListagemLancamentosSchema,
+    LoginSchema, MensagemSchema, PeriodoSchema, ResumoSchema,
+    SubitemBuscaSchema, SubitemDelSchema,
     SubitemSchema, TokenViewSchema, UsuarioCadastroSchema,
     apresenta_categorias, apresenta_lancamento, apresenta_lancamentos,
     apresenta_usuario,
@@ -27,7 +28,7 @@ from schemas import (
 info = Info(title="Budget Tracker API", version="1.0.0")
 
 # Declara o esquema de autenticação para o Swagger renderizar o botão
-# "Authorize": basta colar aqui o token obtido em /login ou /usuario.
+# "Authorize": basta colar aqui o token obtido em /login ou /cadastro.
 security_schemes = {
     "jwt": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
 }
@@ -55,14 +56,10 @@ home_tag = Tag(
     description="Seleção de documentação: Swagger, Redoc ou RapiDoc")
 usuario_tag = Tag(
     name="Usuário", description="Cadastro, login e logout de usuários")
-despesa_tag = Tag(
-    name="Despesa", description="Cadastro e listagem de despesas")
-receita_tag = Tag(
-    name="Receita", description="Cadastro e listagem de receitas")
 lancamento_tag = Tag(
     name="Lançamento",
-    description="Busca, atualização e remoção de um lançamento "
-                "(despesa ou receita) específico")
+    description="Cadastro, listagem, busca, atualização e remoção de "
+                "lançamentos (despesas e receitas)")
 subitem_tag = Tag(
     name="Subitem",
     description="Adição e remoção de subitens de um lançamento")
@@ -108,6 +105,19 @@ def _busca_lancamento_do_usuario(session, lancamento_id: int):
         Lancamento.id == lancamento_id,
         Lancamento.usuario_id == request.usuario.id,
     ).first()
+
+
+def _erro_de_categoria(tipo: TipoLancamento, categoria: str, contexto: str):
+    """Confere se a categoria é válida para o tipo do lançamento
+
+    Retorna a resposta de erro (400) se não for; se for, retorna None.
+    """
+    categorias_validas = CATEGORIAS_POR_TIPO[tipo]
+    if categoria in categorias_validas:
+        return None
+    opcoes = ", ".join(sorted(categorias_validas))
+    return _erro(f"Categoria inválida para {tipo.value}. "
+                 f"Opções válidas: {opcoes}", 400, contexto)
 
 
 def _filtra_periodo(consulta, periodo: PeriodoSchema):
@@ -156,7 +166,7 @@ def home():
 # acesso é o front-end, ao descartar o token guardado.
 # ---------------------------------------------------------------------------
 
-@app.post('/usuario', tags=[usuario_tag],
+@app.post('/cadastro', tags=[usuario_tag],
           responses={"200": TokenViewSchema, "409": ErrorSchema,
                      "400": ErrorSchema})
 def cadastrar_usuario(form: UsuarioCadastroSchema):
@@ -234,107 +244,70 @@ def get_categorias():
 
 
 # ---------------------------------------------------------------------------
-# Cadastro de despesas e receitas
+# Cadastro e listagem de lançamentos (despesas e receitas)
+#
+# Despesa e receita são o mesmo recurso — um lançamento — diferenciados
+# pelo campo `tipo`. Por isso todas as rotas abaixo servem aos dois tipos.
 # ---------------------------------------------------------------------------
 
-def _cria_lancamento(tipo: TipoLancamento, form, usuario_id: int):
-    """Lógica de criação compartilhada por /despesa e /receita"""
-    lancamento = Lancamento(
-        tipo=tipo,
-        nome=form.nome,
-        valor=form.valor,
-        data=form.data,
-        # form.categoria é um membro de CategoriaDespesa/CategoriaReceita;
-        # guardamos o valor puro (string) na coluna.
-        categoria=form.categoria.value,
-        usuario_id=usuario_id,
-    )
-    logger.debug(f"Adicionando {tipo.value} de nome: '{lancamento.nome}'")
-    session = Session()
-    session.add(lancamento)
-    erro = _grava(session, f"Não foi possível salvar {tipo.value} :/",
-                  f"Erro ao adicionar {tipo.value} '{lancamento.nome}'")
+@app.post('/lancamento', tags=[lancamento_tag],
+          responses={"200": LancamentoViewSchema, "401": ErrorSchema,
+                     "400": ErrorSchema},
+          security=JWT_SECURITY)
+@requer_autenticacao
+def add_lancamento(form: LancamentoSchema):
+    """Cadastra um lançamento (despesa ou receita) do usuário autenticado
+
+    O campo `tipo` indica se é uma despesa ou uma receita, e a categoria
+    precisa ser compatível com ele (ver GET /categorias). Retorna a
+    representação do lançamento cadastrado, com seus subitens.
+    """
+    contexto = f"Erro ao adicionar {form.tipo.value} '{form.nome}'"
+    erro = _erro_de_categoria(form.tipo, form.categoria, contexto)
     if erro:
         return erro
 
-    logger.debug(f"Adicionado {tipo.value} de nome: '{lancamento.nome}'")
+    lancamento = Lancamento(
+        tipo=form.tipo,
+        nome=form.nome,
+        valor=form.valor,
+        data=form.data,
+        categoria=form.categoria,
+        usuario_id=request.usuario.id,
+    )
+    session = Session()
+    session.add(lancamento)
+    erro = _grava(session, f"Não foi possível salvar {form.tipo.value} :/",
+                  contexto)
+    if erro:
+        return erro
+
+    logger.debug(f"Adicionado {form.tipo.value} de nome: '{lancamento.nome}'")
     return apresenta_lancamento(lancamento), 200
 
 
-@app.post('/despesa', tags=[despesa_tag],
-          responses={"200": LancamentoViewSchema, "401": ErrorSchema,
-                     "400": ErrorSchema},
-          security=JWT_SECURITY)
+@app.get('/lancamentos', tags=[lancamento_tag],
+         responses={"200": ListagemLancamentosSchema, "401": ErrorSchema},
+         security=JWT_SECURITY)
 @requer_autenticacao
-def add_despesa(form: DespesaSchema):
-    """Cadastra uma despesa do usuário autenticado
+def get_lancamentos(query: LancamentoListaSchema):
+    """Lista os lançamentos do usuário autenticado
 
-    Retorna a representação da despesa cadastrada, com seus subitens.
+    Podem ser filtrados por `tipo` (despesa ou receita) e por período,
+    através de `data_inicio` e/ou `data_fim` (datas inclusivas). Retorna a
+    listagem da data mais recente para a mais antiga, cada lançamento com
+    seus subitens.
     """
-    return _cria_lancamento(TipoLancamento.despesa, form, request.usuario.id)
-
-
-@app.post('/receita', tags=[receita_tag],
-          responses={"200": LancamentoViewSchema, "401": ErrorSchema,
-                     "400": ErrorSchema},
-          security=JWT_SECURITY)
-@requer_autenticacao
-def add_receita(form: ReceitaSchema):
-    """Cadastra uma receita do usuário autenticado
-
-    Retorna a representação da receita cadastrada, com seus subitens.
-    """
-    return _cria_lancamento(TipoLancamento.receita, form, request.usuario.id)
-
-
-# ---------------------------------------------------------------------------
-# Listagem de despesas e receitas (com filtro opcional por período)
-# ---------------------------------------------------------------------------
-
-def _lista_lancamentos(tipo: TipoLancamento, periodo: PeriodoSchema,
-                       usuario_id: int):
-    """Lógica de listagem compartilhada por /despesas e /receitas"""
     session = Session()
     consulta = session.query(Lancamento).filter(
-        Lancamento.tipo == tipo,
-        Lancamento.usuario_id == usuario_id,
-    )
-    consulta = _filtra_periodo(consulta, periodo)
+        Lancamento.usuario_id == request.usuario.id)
+    if query.tipo:
+        consulta = consulta.filter(Lancamento.tipo == query.tipo)
+    consulta = _filtra_periodo(consulta, query)
 
     lancamentos = consulta.order_by(Lancamento.data.desc()).all()
-    logger.debug(f"Coletados {len(lancamentos)} lançamentos do tipo "
-                 f"'{tipo.value}'")
+    logger.debug(f"Coletados {len(lancamentos)} lançamentos")
     return apresenta_lancamentos(lancamentos), 200
-
-
-@app.get('/despesas', tags=[despesa_tag],
-         responses={"200": ListagemLancamentosSchema, "401": ErrorSchema},
-         security=JWT_SECURITY)
-@requer_autenticacao
-def get_despesas(query: PeriodoSchema):
-    """Lista as despesas do usuário autenticado
-
-    Podem ser filtradas por período através de `data_inicio` e/ou
-    `data_fim` (datas inclusivas). Retorna a listagem de despesas, cada
-    uma com seus subitens.
-    """
-    return _lista_lancamentos(TipoLancamento.despesa, query,
-                              request.usuario.id)
-
-
-@app.get('/receitas', tags=[receita_tag],
-         responses={"200": ListagemLancamentosSchema, "401": ErrorSchema},
-         security=JWT_SECURITY)
-@requer_autenticacao
-def get_receitas(query: PeriodoSchema):
-    """Lista as receitas do usuário autenticado
-
-    Podem ser filtradas por período através de `data_inicio` e/ou
-    `data_fim` (datas inclusivas). Retorna a listagem de receitas, cada
-    uma com seus subitens.
-    """
-    return _lista_lancamentos(TipoLancamento.receita, query,
-                              request.usuario.id)
 
 
 # ---------------------------------------------------------------------------
@@ -397,13 +370,9 @@ def update_lancamento(form: LancamentoUpdateSchema):
     if form.data is not None:
         lancamento.data = form.data
     if form.categoria is not None:
-        categorias_validas = CATEGORIAS_POR_TIPO[lancamento.tipo]
-        if form.categoria not in categorias_validas:
-            opcoes = ", ".join(sorted(categorias_validas))
-            return _erro(
-                f"Categoria inválida para {lancamento.tipo.value}. "
-                f"Opções válidas: {opcoes}",
-                400, contexto)
+        erro = _erro_de_categoria(lancamento.tipo, form.categoria, contexto)
+        if erro:
+            return erro
         lancamento.categoria = form.categoria
 
     erro = _grava(session, "Não foi possível atualizar o lançamento :/",

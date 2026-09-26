@@ -49,8 +49,8 @@ Todas as rotas (exceto cadastro, login e categorias) exigem autenticação:
 
 1. Crie uma conta em `POST /usuario` ou faça login em `POST /login` — a
    resposta traz um `token`.
-2. Clique no botão **Authorize** (no topo da página do Swagger) e cole o
-   token no formato `Bearer <token>`.
+2. Clique no botão **Authorize** (no topo da página do Swagger) e cole
+   apenas o token, sem o prefixo `Bearer` — o próprio Swagger o acrescenta.
 3. Agora as demais rotas podem ser testadas normalmente por ali.
 
 > Observação: a chave usada para assinar o token (em `auth.py`) é fixa no

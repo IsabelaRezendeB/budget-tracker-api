@@ -1,4 +1,3 @@
-from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from flask import redirect, request
@@ -121,17 +120,14 @@ def _erro_de_categoria(tipo: TipoLancamento, categoria: str, contexto: str):
 
 
 def _filtra_periodo(consulta, periodo: PeriodoSchema):
-    """Restringe a consulta de lançamentos ao período informado.
+    """Restringe a consulta de lançamentos ao período informado
 
-    As duas datas são inclusivas: `data_fim` vale até o fim daquele dia.
+    As duas datas são inclusivas.
     """
     if periodo.data_inicio:
-        inicio = datetime.combine(periodo.data_inicio, time.min)
-        consulta = consulta.filter(Lancamento.data >= inicio)
+        consulta = consulta.filter(Lancamento.data >= periodo.data_inicio)
     if periodo.data_fim:
-        dia_seguinte = datetime.combine(periodo.data_fim, time.min)
-        dia_seguinte += timedelta(days=1)
-        consulta = consulta.filter(Lancamento.data < dia_seguinte)
+        consulta = consulta.filter(Lancamento.data <= periodo.data_fim)
     return consulta
 
 
@@ -305,7 +301,9 @@ def get_lancamentos(query: LancamentoListaSchema):
         consulta = consulta.filter(Lancamento.tipo == query.tipo)
     consulta = _filtra_periodo(consulta, query)
 
-    lancamentos = consulta.order_by(Lancamento.data.desc()).all()
+    # no mesmo dia, o lançamento cadastrado por último aparece primeiro
+    lancamentos = consulta.order_by(Lancamento.data.desc(),
+                                    Lancamento.id.desc()).all()
     logger.debug(f"Coletados {len(lancamentos)} lançamentos")
     return apresenta_lancamentos(lancamentos), 200
 

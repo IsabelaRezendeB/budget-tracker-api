@@ -1,9 +1,8 @@
 import enum
-from datetime import datetime
+from datetime import date
 from decimal import Decimal
-from typing import Union
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import Column, Date, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from model import Base, Dinheiro, ZERO_REAIS
@@ -58,12 +57,13 @@ class Lancamento(Base):
     tipo = Column(Enum(TipoLancamento), nullable=False)
     nome = Column(String(140), nullable=False)
     valor = Column(Dinheiro, nullable=False)
-    data = Column(DateTime, nullable=False)
+    # Dia em que a despesa ou receita aconteceu, escolhido pelo usuário (pode
+    # ser anterior ao cadastro). Guarda só a data, sem hora.
+    data = Column(Date, nullable=False)
     # Um dos valores de CategoriaDespesa/CategoriaReceita, conforme o tipo.
     # A validação de qual conjunto vale é feita nas rotas (em app.py), já
     # que essa coluna serve tanto despesas quanto receitas.
     categoria = Column(String(50), nullable=False, default="Outros")
-    data_insercao = Column(DateTime, default=datetime.now)
 
     # Todo lançamento pertence a um usuário; só o dono pode vê-lo, editá-lo
     # ou removê-lo (essa checagem é feita nas rotas, em app.py).
@@ -75,8 +75,7 @@ class Lancamento(Base):
     subitens = relationship("Subitem", cascade="all, delete-orphan")
 
     def __init__(self, tipo: TipoLancamento, nome: str, valor: Decimal,
-                 data: datetime, usuario_id: int, categoria: str = "Outros",
-                 data_insercao: Union[datetime, None] = None):
+                 data: date, usuario_id: int, categoria: str = "Outros"):
         """
         Cria uma despesa ou receita
 
@@ -88,7 +87,6 @@ class Lancamento(Base):
             usuario_id: id do usuário dono deste lançamento.
             categoria: categoria do lançamento (ver CategoriaDespesa e
                 CategoriaReceita).
-            data_insercao: data de quando o lançamento foi inserido na base.
         """
         self.tipo = tipo
         self.nome = nome
@@ -96,8 +94,6 @@ class Lancamento(Base):
         self.data = data
         self.usuario_id = usuario_id
         self.categoria = categoria
-        if data_insercao:
-            self.data_insercao = data_insercao
 
     def adiciona_subitem(self, subitem: Subitem):
         """Adiciona um novo subitem ao Lancamento"""

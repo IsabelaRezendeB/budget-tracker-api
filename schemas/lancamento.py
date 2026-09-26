@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 
@@ -12,13 +12,13 @@ from schemas.tipos import ValorMonetario
 DESCRICAO_DATA = "Data do lançamento. Se omitida, assume o dia atual."
 
 
-def hoje() -> datetime:
-    """Data do dia atual (à meia-noite), calculada a cada chamada.
+def hoje() -> date:
+    """Data do dia atual, calculada a cada chamada.
 
-    É o padrão do campo `data` no cadastro: usar `datetime.now()` direto
-    como default fixaria a data do momento em que o servidor subiu.
+    É o padrão do campo `data` no cadastro: usar `date.today()` direto como
+    default fixaria a data do dia em que o servidor subiu.
     """
-    return datetime.combine(date.today(), time.min)
+    return date.today()
 
 
 def _vazia_vira_hoje(valor):
@@ -38,7 +38,7 @@ class LancamentoSchema(BaseModel):
     tipo: TipoLancamento = TipoLancamento.despesa
     nome: str = Field("Compras do mês", min_length=1)
     valor: ValorMonetario = Decimal("30.00")
-    data: datetime = Field(default_factory=hoje, description=DESCRICAO_DATA)
+    data: date = Field(default_factory=hoje, description=DESCRICAO_DATA)
     categoria: str = Field(
         "Outros",
         description="Categoria compatível com o tipo (ver GET /categorias).")
@@ -83,7 +83,7 @@ class LancamentoUpdateSchema(BaseModel):
     id: int = 1
     nome: Optional[str] = Field(None, min_length=1)
     valor: Optional[ValorMonetario] = None
-    data: Optional[datetime] = None
+    data: Optional[date] = None
     categoria: Optional[str] = None
 
 
@@ -95,7 +95,7 @@ class LancamentoViewSchema(BaseModel):
     tipo: TipoLancamento
     nome: str = "Compras do mês"
     valor: float = 30.0
-    data: datetime
+    data: date
     categoria: Optional[str] = None
     quantidade_subitens: int
     subitens: List[SubitemViewSchema]

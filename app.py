@@ -52,7 +52,7 @@ def encerra_sessao_do_banco(exception=None):
 # Definindo tags utilizadas para agrupar as rotas na documentação Swagger
 home_tag = Tag(
     name="Documentação",
-    description="Seleção de documentação: Swagger, Redoc ou RapiDoc")
+    description="Documentação Swagger")
 usuario_tag = Tag(
     name="Usuário", description="Cadastro, login e logout de usuários")
 lancamento_tag = Tag(
@@ -145,8 +145,7 @@ def _em_centavos(expressao):
 def home():
     """Redireciona para a documentação
 
-    Leva a /openapi, tela que permite escolher entre Swagger, Redoc ou
-    RapiDoc.
+    Leva a /openapi, tela que permite escolher acessar o Swagger.
     """
     return redirect('/openapi')
 
